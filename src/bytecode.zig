@@ -8,6 +8,11 @@ const print = std.debug.print;
 /// A bytecode instruction.
 pub const OpCode = enum(u8) {
     Constant,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Negate,
     Return,
 };
 
@@ -52,9 +57,22 @@ test Chunk {
     var chunk = Chunk.init(allocator);
     defer chunk.deinit();
 
-    const constant = try chunk.addConstant(1.2);
+    var constant = try chunk.addConstant(1.2);
     try chunk.write(@intFromEnum(OpCode.Constant), 123);
     try chunk.write(@intCast(constant), 123);
+
+    constant = try chunk.addConstant(3.4);
+    try chunk.write(@intFromEnum(OpCode.Constant), 123);
+    try chunk.write(@intCast(constant), 123);
+
+    try chunk.write(@intFromEnum(OpCode.Add), 123);
+
+    constant = try chunk.addConstant(5.6);
+    try chunk.write(@intFromEnum(OpCode.Constant), 123);
+    try chunk.write(@intCast(constant), 123);
+
+    try chunk.write(@intFromEnum(OpCode.Divide), 123);
+    try chunk.write(@intFromEnum(OpCode.Negate), 123);
 
     try chunk.write(@intFromEnum(OpCode.Return), 123);
 

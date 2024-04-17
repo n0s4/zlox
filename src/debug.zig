@@ -29,7 +29,13 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
     const instruction: OpCode = @enumFromInt(byte);
 
     return switch (instruction) {
-        .Return => simpleInstruction(instruction, offset),
+        .Return,
+        .Add,
+        .Subtract,
+        .Multiply,
+        .Divide,
+        .Negate,
+        => simpleInstruction(instruction, offset),
         .Constant => constantInstruction(instruction, chunk, offset),
     };
 }
