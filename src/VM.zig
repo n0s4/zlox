@@ -13,6 +13,8 @@ const v = @import("value.zig");
 const Value = v.Value;
 const printValue = v.printValue;
 
+const compile = @import("compiler.zig").compile;
+
 const debug = @import("debug.zig");
 
 const stack_max = 256;
@@ -30,18 +32,17 @@ stack_top: usize = 0,
 
 const Error = error{ CompileTime, Runtime };
 
-pub fn interpret(self: *VM, chunk: *Chunk) Error!void {
-    self.chunk = chunk;
-    try self.run();
+pub fn interpret(source: []u8) Error!void {
+    compile(source);
 }
 
 fn run(self: *VM) Error!void {
     while (true) {
         if (comptime builtin.mode == .Debug) {
             print("          ", .{});
-            for (0..self.stack_top) |i| {
+            for (self.stack[0..self.stack_top]) |value| {
                 print("[ ", .{});
-                printValue(self.stack[i]);
+                printValue(value);
                 print(" ]", .{});
             }
             print("\n", .{});

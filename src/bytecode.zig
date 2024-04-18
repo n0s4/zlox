@@ -18,19 +18,17 @@ pub const OpCode = enum(u8) {
 
 /// A chunk of bytecode.
 pub const Chunk = struct {
-    const LineNo = u32;
-
     /// Bytecode Instructions.
     code: ArrayList(u8),
     /// Stores the line number for each corresponding byte in `.code`.
     /// code.items.len == lines.items.len.
-    lines: ArrayList(LineNo),
+    lines: ArrayList(u32),
     constants: ArrayList(Value),
 
     pub fn init(allocator: Allocator) Chunk {
         return Chunk{
             .code = ArrayList(u8).init(allocator),
-            .lines = ArrayList(LineNo).init(allocator),
+            .lines = ArrayList(u32).init(allocator),
             .constants = ArrayList(Value).init(allocator),
         };
     }
@@ -41,7 +39,7 @@ pub const Chunk = struct {
         self.constants.deinit();
     }
 
-    pub fn write(self: *Chunk, byte: u8, line: LineNo) Allocator.Error!void {
+    pub fn write(self: *Chunk, byte: u8, line: u32) Allocator.Error!void {
         try self.code.append(byte);
         try self.lines.append(line);
     }
