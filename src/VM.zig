@@ -1,6 +1,7 @@
 const VM = @This();
 
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const print = std.debug.print;
 
 const builtin = @import("builtin");
@@ -13,7 +14,7 @@ const v = @import("value.zig");
 const Value = v.Value;
 const printValue = v.printValue;
 
-const compile = @import("compiler.zig").compile;
+const Compiler = @import("Compiler.zig");
 
 const debug = @import("debug.zig");
 
@@ -26,14 +27,21 @@ chunk: *Chunk = undefined,
 // is painful in Zig, and there is no real performance difference afaik.
 ip: usize = 0,
 
-stack: [stack_max]Value = [_]Value{undefined} ** stack_max,
+stack: [stack_max]Value = undefined,
 
 stack_top: usize = 0,
 
-const Error = error{ CompileTime, Runtime };
+const Error = error{ CompileTime, RunTime };
 
-pub fn interpret(source: []u8) Error!void {
-    compile(source);
+pub fn interpret(self: *VM, source: []u8, allocator: Allocator) Error!void {
+    var chunk = Chunk.init(allocator);
+    defer chunk.deinit();
+
+    var compiler = Compiler.init(source);
+    if (!compiler.compile(&chunk)) return Error.CompileTime;
+
+    self.chunk = &chunk;
+    try self.run();
 }
 
 fn run(self: *VM) Error!void {

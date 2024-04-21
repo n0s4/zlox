@@ -12,7 +12,7 @@ pub fn main() !void {
     defer std.process.argsFree(gpa.allocator(), args);
 
     switch (args.len) {
-        1 => try repl(),
+        1 => try repl(gpa.allocator()),
         2 => try runFile(args[1], gpa.allocator()),
         else => {
             print("Usage: clox [path]\n", .{});
@@ -21,7 +21,7 @@ pub fn main() !void {
     }
 }
 
-fn repl() !void {
+fn repl(allocator: Allocator) !void {
     var line: [1024]u8 = undefined;
     var stdin = std.io.getStdIn().reader();
     while (true) {
@@ -30,13 +30,17 @@ fn repl() !void {
             print("\n", .{});
             break;
         };
-
-        try VM.interpret(code);
+        var vm = VM{};
+        vm.interpret(code, allocator) catch |err| switch (err) {
+            error.CompileTime => std.process.exit(65),
+            error.RunTime => std.process.exit(70),
+        };
     }
 }
 
 fn runFile(path: [:0]u8, allocator: Allocator) !void {
     var file = try std.fs.cwd().openFileZ(path, .{});
     const source = try file.readToEndAlloc(allocator, try file.getEndPos());
-    try VM.interpret(source);
+    var vm = VM{};
+    try vm.interpret(source, allocator);
 }
