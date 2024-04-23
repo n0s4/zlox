@@ -10,9 +10,7 @@ const bc = @import("bytecode.zig");
 const Chunk = bc.Chunk;
 const OpCode = bc.OpCode;
 
-const v = @import("value.zig");
-const Value = v.Value;
-const printValue = v.printValue;
+const Value = @import("value.zig").Value;
 
 const Compiler = @import("Compiler.zig");
 
@@ -25,6 +23,7 @@ chunk: *Chunk = undefined,
 
 // I chose to use an index over a many-pointer here as pointer subtraction
 // is painful in Zig, and there is no real performance difference afaik.
+/// The index of the *next* instruction to be read from the chunk.
 ip: usize = 0,
 
 stack: [stack_max]Value = undefined,
@@ -50,7 +49,7 @@ fn run(self: *VM) Error!void {
             print("          ", .{});
             for (self.stack[0..self.stack_top]) |value| {
                 print("[ ", .{});
-                printValue(value);
+                value.print();
                 print(" ]", .{});
             }
             print("\n", .{});
@@ -63,34 +62,63 @@ fn run(self: *VM) Error!void {
                 const constant = self.readConstant();
                 self.push(constant);
             },
-            .Add => {
+            .Nil => self.push(.nil),
+            .True => self.push(.{ .boolean = true }),
+            .False => self.push(.{ .boolean = false }),
+            .Equal => {
                 const b = self.pop();
                 const a = self.pop();
-                self.push(a + b);
+                self.push(.{ .boolean = a.equals(b) });
+            },
+            .Greater => {
+                const ops = try self.getNumberOperands();
+                self.push(.{ .boolean = ops.left > ops.right });
+            },
+            .Less => {
+                const ops = try self.getNumberOperands();
+                self.push(.{ .boolean = ops.left < ops.right });
+            },
+            .Add => {
+                const ops = try self.getNumberOperands();
+                self.push(.{ .number = ops.left + ops.right });
             },
             .Subtract => {
-                const b = self.pop();
-                const a = self.pop();
-                self.push(a - b);
+                const ops = try self.getNumberOperands();
+                self.push(.{ .number = ops.left - ops.right });
             },
             .Multiply => {
-                const b = self.pop();
-                const a = self.pop();
-                self.push(a * b);
+                const ops = try self.getNumberOperands();
+                self.push(.{ .number = ops.left * ops.right });
             },
             .Divide => {
-                const b = self.pop();
-                const a = self.pop();
-                self.push(a / b);
+                const ops = try self.getNumberOperands();
+                self.push(.{ .number = ops.left / ops.right });
             },
-            .Negate => self.push(-self.pop()),
+            .Not => self.push(.{ .boolean = !isTruthy(self.pop()) }),
+            .Negate => {
+                if (!self.peek(0).is(.number)) {
+                    self.runtimeError("Operand must be a number.", .{});
+                    return Error.RunTime;
+                }
+                self.push(.{ .number = -self.pop().number });
+            },
             .Return => {
-                printValue(self.pop());
+                self.pop().print();
                 print("\n", .{});
                 return;
             },
         }
     }
+}
+
+/// Ensures both values at the top of the stack are numbers and returns them in order.
+fn getNumberOperands(self: *VM) Error!struct { left: f32, right: f32 } {
+    if (!self.peek(0).is(.number) or !self.peek(1).is(.number)) {
+        self.runtimeError("Operands must be numbers.", .{});
+        return Error.RunTime;
+    }
+    // The top value should be the rhs, so we pop them in reverse order.
+    return .{ .right = self.pop().number, .left = self.pop().number };
 }
 
 fn readByte(self: *VM) u8 {
@@ -110,4 +138,23 @@ fn push(self: *VM, value: Value) void {
 fn pop(self: *VM) Value {
     self.stack_top -= 1;
     return self.stack[self.stack_top];
+}
+
+fn peek(self: *VM, distance: usize) Value {
+    return self.stack[self.stack_top - 1 - distance];
+}
+
+/// False and nil are falsey, all other values are truthy.
+fn isTruthy(value: Value) bool {
+    return switch (value) {
+        .boolean => value.boolean,
+        .nil => false,
+        else => true,
+    };
+}
+
+fn runtimeError(self: *VM, comptime fmt: []const u8, args: anytype) void {
+    print(fmt, args);
+    print("\n[line {d}] in script.\n", .{self.chunk.lines.items[self.ip - 1]});
+    self.stack_top = 0;
 }

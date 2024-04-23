@@ -1,6 +1,5 @@
 const std = @import("std");
 const Value = @import("value.zig").Value;
-const printValue = @import("value.zig").printValue;
 const debug = @import("debug.zig");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
@@ -9,10 +8,17 @@ const print = std.debug.print;
 /// A bytecode instruction.
 pub const OpCode = enum(u8) {
     Constant,
+    Nil,
+    True,
+    False,
+    Equal,
+    Greater,
+    Less,
     Add,
     Subtract,
     Multiply,
     Divide,
+    Not,
     Negate,
     Return,
 };

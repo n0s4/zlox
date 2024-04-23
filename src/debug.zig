@@ -3,7 +3,7 @@ const print = std.debug.print;
 const bytecode = @import("bytecode.zig");
 const Chunk = bytecode.Chunk;
 const OpCode = bytecode.OpCode;
-const printValue = @import("value.zig").printValue;
+const Value = @import("value.zig").Value;
 
 /// Prints a human-readable representation of bytecode.
 pub fn disassembleChunk(chunk: *Chunk, name: []const u8) void {
@@ -29,14 +29,8 @@ pub fn disassembleInstruction(chunk: *Chunk, offset: usize) usize {
     const instruction: OpCode = @enumFromInt(byte);
 
     return switch (instruction) {
-        .Return,
-        .Add,
-        .Subtract,
-        .Multiply,
-        .Divide,
-        .Negate,
-        => simpleInstruction(instruction, offset),
         .Constant => constantInstruction(instruction, chunk, offset),
+        else => simpleInstruction(instruction, offset),
     };
 }
 
@@ -48,7 +42,7 @@ fn simpleInstruction(instruction: OpCode, offset: usize) usize {
 fn constantInstruction(instruction: OpCode, chunk: *Chunk, offset: usize) usize {
     const constant = chunk.code.items[offset + 1];
     print("{s: <16} {d: >4} '", .{ @tagName(instruction), constant });
-    printValue(chunk.constants.items[constant]);
+    chunk.constants.items[constant].print();
     print("'\n", .{});
     return offset + 2;
 }

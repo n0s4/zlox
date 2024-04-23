@@ -58,6 +58,16 @@ const rules = blk: {
     }.addRule;
 
     addRule(&table, .LeftParen, .{ .prefix = grouping });
+    addRule(&table, .Nil, .{ .prefix = literal });
+    addRule(&table, .False, .{ .prefix = literal });
+    addRule(&table, .True, .{ .prefix = literal });
+    addRule(&table, .EqualEqual, .{ .infix = binary, .precedence = .Equality });
+    addRule(&table, .BangEqual, .{ .infix = binary, .precedence = .Equality });
+    addRule(&table, .Greater, .{ .infix = binary, .precedence = .Comparison });
+    addRule(&table, .GreaterEqual, .{ .infix = binary, .precedence = .Comparison });
+    addRule(&table, .Less, .{ .infix = binary, .precedence = .Comparison });
+    addRule(&table, .LessEqual, .{ .infix = binary, .precedence = .Comparison });
+    addRule(&table, .Bang, .{ .prefix = unary });
     addRule(&table, .Minus, .{ .prefix = unary, .infix = binary, .precedence = .Term });
     addRule(&table, .Plus, .{ .infix = binary, .precedence = .Term });
     addRule(&table, .Star, .{ .infix = binary, .precedence = .Factor });
@@ -109,17 +119,20 @@ fn grouping(self: *Compiler) !void {
 }
 
 fn number(self: *Compiler) !void {
-    const value = try std.fmt.parseFloat(f32, self.previous.lexeme);
-    try self.emitConstant(value);
+    const num = try std.fmt.parseFloat(f32, self.previous.lexeme);
+    try self.emitConstant(.{ .number = num });
 }
 
 fn unary(self: *Compiler) !void {
     const operator_type = self.previous.type;
-    std.debug.assert(operator_type == .Minus);
 
     try self.parsePrecedence(.Unary);
 
-    try self.emitByte(@intFromEnum(OpCode.Negate));
+    try self.emitByte(@intFromEnum(switch (operator_type) {
+        .Bang => OpCode.Not,
+        .Minus => OpCode.Negate,
+        else => unreachable,
+    }));
 }
 
 fn binary(self: *Compiler) !void {
@@ -127,11 +140,26 @@ fn binary(self: *Compiler) !void {
     const rule = getRule(operator_type);
     try self.parsePrecedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
 
-    try self.emitByte((switch (operator_type) {
-        .Plus => @intFromEnum(OpCode.Add),
-        .Minus => @intFromEnum(OpCode.Subtract),
-        .Star => @intFromEnum(OpCode.Multiply),
-        .Slash => @intFromEnum(OpCode.Divide),
+    try switch (operator_type) {
+        .EqualEqual => self.emitOp(.Equal),
+        .Greater => self.emitOp(.Greater),
+        .Less => self.emitOp(.Less),
+        .BangEqual => self.emitOps(.Equal, .Not),
+        .GreaterEqual => self.emitOps(.Less, .Not),
+        .LessEqual => self.emitOps(.Greater, .Not),
+        .Plus => self.emitOp(.Add),
+        .Minus => self.emitOp(.Subtract),
+        .Star => self.emitOp(.Multiply),
+        .Slash => self.emitOp(.Divide),
+        else => unreachable,
+    };
+}
+
+fn literal(self: *Compiler) !void {
+    try self.emitByte(@intFromEnum(switch (self.previous.type) {
+        .False => OpCode.False,
+        .True => OpCode.True,
+        .Nil => OpCode.Nil,
         else => unreachable,
     }));
 }
@@ -150,6 +178,14 @@ fn makeConstant(self: *Compiler, value: Value) !usize {
         return error.TooManyConstants;
     }
     return constant;
+}
+
+fn emitOp(self: *Compiler, op: OpCode) !void {
+    try self.emitByte(@intFromEnum(op));
+}
+
+fn emitOps(self: *Compiler, op1: OpCode, op2: OpCode) !void {
+    try self.emitBytes(@intFromEnum(op1), @intFromEnum(op2));
 }
 
 fn emitByte(self: *Compiler, byte: u8) !void {
