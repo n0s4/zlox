@@ -11,6 +11,8 @@ const Chunk = bc.Chunk;
 const OpCode = bc.OpCode;
 
 const Value = @import("value.zig").Value;
+const Object = @import("Object.zig").Object;
+const ObjectList = @import("ObjectList.zig");
 
 const Compiler = @import("Compiler.zig");
 
@@ -21,6 +23,8 @@ const stack_max = 256;
 // chunk is never used until interpret, at which point it is given.
 chunk: *Chunk = undefined,
 
+objects: ObjectList,
+
 // I chose to use an index over a many-pointer here as pointer subtraction
 // is painful in Zig, and there is no real performance difference afaik.
 /// The index of the *next* instruction to be read from the chunk.
@@ -30,6 +34,16 @@ stack: [stack_max]Value = undefined,
 
 stack_top: usize = 0,
 
+pub fn init(allocator: Allocator) VM {
+    return .{
+        .objects = ObjectList.init(allocator),
+    };
+}
+
+pub fn deinit(self: *VM) void {
+    self.objects.deinit();
+}
+
 const Error = error{ CompileTime, RunTime };
 
 pub fn interpret(self: *VM, source: []u8, allocator: Allocator) Error!void {
@@ -37,7 +51,7 @@ pub fn interpret(self: *VM, source: []u8, allocator: Allocator) Error!void {
     defer chunk.deinit();
 
     var compiler = Compiler.init(source);
-    if (!compiler.compile(&chunk)) return Error.CompileTime;
+    if (!compiler.compile(&chunk, &self.objects)) return Error.CompileTime;
 
     self.chunk = &chunk;
     try self.run();
@@ -79,8 +93,16 @@ fn run(self: *VM) Error!void {
                 self.push(.{ .boolean = ops.left < ops.right });
             },
             .Add => {
-                const ops = try self.getNumberOperands();
-                self.push(.{ .number = ops.left + ops.right });
+                if (self.peek(0).isObjectOf(.string) and self.peek(1).isObjectOf(.string)) {
+                    self.concatenate() catch return Error.RunTime;
+                } else if (self.peek(0).is(.number) and self.peek(1).is(.number)) {
+                    const b = self.pop().number;
+                    const a = self.pop().number;
+                    self.push(.{ .number = a + b });
+                } else {
+                    self.runtimeError("Operands must be both numbers or strings.", .{});
+                    return Error.RunTime;
+                }
             },
             .Subtract => {
                 const ops = try self.getNumberOperands();
@@ -109,6 +131,15 @@ fn run(self: *VM) Error!void {
             },
         }
     }
+}
+
+fn concatenate(self: *VM) !void {
+    const b = self.pop().object.string;
+    const a = self.pop().object.string;
+    const object = try self.objects.newString(a.len + b.len);
+    std.mem.copyForwards(u8, object.string, a);
+    std.mem.copyForwards(u8, object.string[a.len..], b);
+    self.push(.{ .object = object });
 }
 
 /// Ensures both values at the top of the stack are numbers and returns them in order.

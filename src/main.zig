@@ -7,6 +7,7 @@ const VM = @import("VM.zig");
 
 pub fn main() !void {
     var gpa = GPA{};
+    defer if (gpa.deinit() == .leak) unreachable;
 
     const args = try std.process.argsAlloc(gpa.allocator());
     defer std.process.argsFree(gpa.allocator(), args);
@@ -19,6 +20,7 @@ pub fn main() !void {
             std.process.exit(64);
         },
     }
+    // if (gpa.deinit() == .leak) unreachable;
 }
 
 fn repl(allocator: Allocator) !void {
@@ -30,7 +32,8 @@ fn repl(allocator: Allocator) !void {
             print("\n", .{});
             break;
         };
-        var vm = VM{};
+        var vm = VM.init(allocator);
+        defer vm.deinit();
         vm.interpret(code, allocator) catch |err| switch (err) {
             error.CompileTime => std.process.exit(65),
             error.RunTime => std.process.exit(70),
@@ -41,6 +44,7 @@ fn repl(allocator: Allocator) !void {
 fn runFile(path: [:0]u8, allocator: Allocator) !void {
     var file = try std.fs.cwd().openFileZ(path, .{});
     const source = try file.readToEndAlloc(allocator, try file.getEndPos());
-    var vm = VM{};
+    var vm = VM.init(allocator);
+    defer vm.deinit();
     try vm.interpret(source, allocator);
 }

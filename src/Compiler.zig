@@ -7,6 +7,8 @@ const Scanner = @import("Scanner.zig");
 const Token = @import("Token.zig");
 const bc = @import("bytecode.zig");
 const Value = @import("value.zig").Value;
+const Object = @import("Object.zig");
+const ObjectList = @import("ObjectList.zig");
 const debug = @import("debug.zig");
 const print = std.debug.print;
 const Chunk = bc.Chunk;
@@ -17,6 +19,7 @@ current: Token = undefined,
 previous: Token = undefined,
 
 chunk: *Chunk = undefined,
+objects: *ObjectList = undefined,
 
 had_error: bool = false,
 panic_mode: bool = false,
@@ -73,6 +76,7 @@ const rules = blk: {
     addRule(&table, .Star, .{ .infix = binary, .precedence = .Factor });
     addRule(&table, .Slash, .{ .infix = binary, .precedence = .Factor });
     addRule(&table, .Number, .{ .prefix = number });
+    addRule(&table, .String, .{ .prefix = string });
 
     break :blk table;
 };
@@ -81,8 +85,9 @@ fn getRule(tok_type: Token.Type) *const ParseRule {
     return &rules[@intFromEnum(tok_type)];
 }
 
-pub fn compile(self: *Compiler, chunk: *Chunk) bool {
+pub fn compile(self: *Compiler, chunk: *Chunk, objects: *ObjectList) bool {
     self.chunk = chunk;
+    self.objects = objects;
     self.advance();
     self.expression() catch return false;
     self.consume(.EOF, "Expect end of expression.");
@@ -121,6 +126,16 @@ fn grouping(self: *Compiler) !void {
 fn number(self: *Compiler) !void {
     const num = try std.fmt.parseFloat(f32, self.previous.lexeme);
     try self.emitConstant(.{ .number = num });
+}
+
+fn string(self: *Compiler) !void {
+    const str = self.previous.lexeme;
+    // slicing out the surrounding quotation marks.
+    const chars = str[1 .. str.len - 1];
+
+    const object = try self.objects.newString(chars.len);
+    std.mem.copyForwards(u8, object.string, chars);
+    try self.emitConstant(.{ .object = object });
 }
 
 fn unary(self: *Compiler) !void {
