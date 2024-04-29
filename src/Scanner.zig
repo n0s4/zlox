@@ -1,3 +1,4 @@
+//! Scans raw source code into tokens.
 const Self = @This();
 
 const std = @import("std");
@@ -185,4 +186,41 @@ fn isAlpha(c: u8) bool {
 
 fn isDigit(c: u8) bool {
     return '0' <= c and c <= '9';
+}
+
+const expectEqual = std.testing.expectEqual;
+const expectEqualSlces = std.testing.expectEqualSlices;
+
+test Self {
+    const source =
+        \\fun add(a, b) {
+        \\    return a + b;
+        \\}
+    ;
+    const expected = [_]Token{
+        .{ .type = .Fun, .lexeme = "fun", .line = 1 },
+        .{ .type = .Identifier, .lexeme = "add", .line = 1 },
+        .{ .type = .LeftParen, .lexeme = "(", .line = 1 },
+        .{ .type = .Identifier, .lexeme = "a", .line = 1 },
+        .{ .type = .Comma, .lexeme = ",", .line = 1 },
+        .{ .type = .Identifier, .lexeme = "b", .line = 1 },
+        .{ .type = .RightParen, .lexeme = ")", .line = 1 },
+        .{ .type = .LeftBrace, .lexeme = "{", .line = 1 },
+        .{ .type = .Return, .lexeme = "return", .line = 2 },
+        .{ .type = .Identifier, .lexeme = "a", .line = 2 },
+        .{ .type = .Plus, .lexeme = "+", .line = 2 },
+        .{ .type = .Identifier, .lexeme = "b", .line = 2 },
+        .{ .type = .Semicolon, .lexeme = ";", .line = 2 },
+        .{ .type = .RightBrace, .lexeme = "}", .line = 3 },
+        .{ .type = .EOF, .lexeme = "", .line = 3 },
+    };
+
+    var scanner = Self.init(source);
+
+    for (expected) |exp| {
+        const actual = scanner.nextToken();
+        try expectEqual(exp.type, actual.type);
+        try expectEqual(exp.line, actual.line);
+        try expectEqualSlces(u8, exp.lexeme, actual.lexeme);
+    }
 }

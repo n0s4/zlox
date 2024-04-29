@@ -15,17 +15,27 @@ const Chunk = bc.Chunk;
 const OpCode = bc.OpCode;
 
 scanner: Scanner,
+
+// The compiler only needs to view 2 tokens at any given time while parsing.
 current: Token = undefined,
 previous: Token = undefined,
 
-chunk: *Chunk = undefined,
-objects: *ObjectList = undefined,
+/// Target chunk to write code to.
+chunk: *Chunk,
 
+objects: *ObjectList,
+
+/// Set during parsing if at least one error is encountered.
 had_error: bool = false,
+/// Set after an error to prevent cascading errors from being reported.
 panic_mode: bool = false,
 
-pub fn init(source: []const u8) Compiler {
-    return .{ .scanner = Scanner.init(source) };
+pub fn init(source: []const u8, chunk: *Chunk, objects: *ObjectList) Compiler {
+    return .{
+        .scanner = Scanner.init(source),
+        .chunk = chunk,
+        .objects = objects,
+    };
 }
 
 const Precedence = enum {
@@ -85,9 +95,7 @@ fn getRule(tok_type: Token.Type) *const ParseRule {
     return &rules[@intFromEnum(tok_type)];
 }
 
-pub fn compile(self: *Compiler, chunk: *Chunk, objects: *ObjectList) bool {
-    self.chunk = chunk;
-    self.objects = objects;
+pub fn compile(self: *Compiler) bool {
     self.advance();
     self.expression() catch return false;
     self.consume(.EOF, "Expect end of expression.");
@@ -143,11 +151,11 @@ fn unary(self: *Compiler) !void {
 
     try self.parsePrecedence(.Unary);
 
-    try self.emitByte(@intFromEnum(switch (operator_type) {
-        .Bang => OpCode.Not,
-        .Minus => OpCode.Negate,
+    try self.emitOp(switch (operator_type) {
+        .Bang => .Not,
+        .Minus => .Negate,
         else => unreachable,
-    }));
+    });
 }
 
 fn binary(self: *Compiler) !void {
@@ -171,12 +179,12 @@ fn binary(self: *Compiler) !void {
 }
 
 fn literal(self: *Compiler) !void {
-    try self.emitByte(@intFromEnum(switch (self.previous.type) {
-        .False => OpCode.False,
-        .True => OpCode.True,
-        .Nil => OpCode.Nil,
+    try self.emitOp(switch (self.previous.type) {
+        .False => .False,
+        .True => .True,
+        .Nil => .Nil,
         else => unreachable,
-    }));
+    });
 }
 
 fn emitConstant(self: *Compiler, value: Value) !void {

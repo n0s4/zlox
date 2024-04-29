@@ -34,7 +34,7 @@ fn repl(allocator: Allocator) !void {
         };
         var vm = VM.init(allocator);
         defer vm.deinit();
-        vm.interpret(code, allocator) catch |err| switch (err) {
+        vm.interpret(code) catch |err| switch (err) {
             error.CompileTime => std.process.exit(65),
             error.RunTime => std.process.exit(70),
         };
@@ -46,5 +46,5 @@ fn runFile(path: [:0]u8, allocator: Allocator) !void {
     const source = try file.readToEndAlloc(allocator, try file.getEndPos());
     var vm = VM.init(allocator);
     defer vm.deinit();
-    try vm.interpret(source, allocator);
+    try vm.interpret(source);
 }

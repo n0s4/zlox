@@ -2,6 +2,7 @@ const std = @import("std");
 const Object = @import("Object.zig").Object;
 const meta = std.meta;
 
+/// A dynamically typed runtime value.
 pub const Value = union(enum) {
     pub const Type = std.meta.Tag(Value);
 

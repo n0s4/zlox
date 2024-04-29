@@ -11,7 +11,6 @@ const Chunk = bc.Chunk;
 const OpCode = bc.OpCode;
 
 const Value = @import("value.zig").Value;
-const Object = @import("Object.zig").Object;
 const ObjectList = @import("ObjectList.zig");
 
 const Compiler = @import("Compiler.zig");
@@ -21,7 +20,7 @@ const debug = @import("debug.zig");
 const stack_max = 256;
 
 // chunk is never used until interpret, at which point it is given.
-chunk: *Chunk = undefined,
+chunk: Chunk,
 
 objects: ObjectList,
 
@@ -30,34 +29,33 @@ objects: ObjectList,
 /// The index of the *next* instruction to be read from the chunk.
 ip: usize = 0,
 
+/// Runtime values are stored on a LIFO stack.
 stack: [stack_max]Value = undefined,
 
 stack_top: usize = 0,
 
 pub fn init(allocator: Allocator) VM {
     return .{
+        .chunk = Chunk.init(allocator),
         .objects = ObjectList.init(allocator),
     };
 }
 
 pub fn deinit(self: *VM) void {
+    self.chunk.deinit();
     self.objects.deinit();
 }
 
 const Error = error{ CompileTime, RunTime };
 
-pub fn interpret(self: *VM, source: []u8, allocator: Allocator) Error!void {
-    var chunk = Chunk.init(allocator);
-    defer chunk.deinit();
+pub fn interpret(self: *VM, source: []u8) Error!void {
+    var compiler = Compiler.init(source, &self.chunk, &self.objects);
+    if (!compiler.compile()) return Error.CompileTime;
 
-    var compiler = Compiler.init(source);
-    if (!compiler.compile(&chunk, &self.objects)) return Error.CompileTime;
-
-    self.chunk = &chunk;
-    try self.run();
+    self.run() catch return Error.RunTime;
 }
 
-fn run(self: *VM) Error!void {
+fn run(self: *VM) !void {
     while (true) {
         if (comptime builtin.mode == .Debug) {
             print("          ", .{});
@@ -67,7 +65,7 @@ fn run(self: *VM) Error!void {
                 print(" ]", .{});
             }
             print("\n", .{});
-            _ = debug.disassembleInstruction(self.chunk, self.ip);
+            _ = debug.disassembleInstruction(&self.chunk, self.ip);
         }
 
         const instruction: OpCode = @enumFromInt(self.readByte());
@@ -94,7 +92,7 @@ fn run(self: *VM) Error!void {
             },
             .Add => {
                 if (self.peek(0).isObjectOf(.string) and self.peek(1).isObjectOf(.string)) {
-                    self.concatenate() catch return Error.RunTime;
+                    try self.concatenate();
                 } else if (self.peek(0).is(.number) and self.peek(1).is(.number)) {
                     const b = self.pop().number;
                     const a = self.pop().number;
